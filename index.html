@@ -214,15 +214,15 @@ footer{border-top:1px solid var(--grid);padding:14px 0 26px;color:var(--muted);f
   <div class="card" style="margin-top:14px"><h2>Cài đặt quy đổi tiền</h2>
     <div class="filters" style="border:0;padding:0">
       <div class="f"><label for="sFx">Tỷ giá USD/VNĐ</label><input id="sFx" type="number" step="10" min="1000" value="26000" style="width:110px"></div>
-      <div class="f"><label for="sFee">Cách tính phí</label><select id="sFee"><option value="rt">Phí trong bảng = khứ hồi (1 lần/lệnh)</option><option value="side">Phí trong bảng = 1 chiều (×2 khi mở + đóng)</option></select></div>
+      <div class="f"><label for="sFee">Cách tính phí</label><select id="sFee"><option value="side">Phí 1 chiều (×2 khi mở + đóng) — theo biểu Anfin</option><option value="rt">Coi phí là khứ hồi (1 lần/lệnh)</option></select></div>
       <div class="f"><label for="sBasis">Cơ sở tính lời lỗ</label><select id="sBasis"><option value="point">Biến động 1 giá</option><option value="tick">Biến động 1 bước giá</option></select></div>
     </div>
     <p class="note">Tỷ giá mặc định 26,000 chỉ là giá trị giữ chỗ — hãy nhập tỷ giá thực tế. Cài đặt được nhớ trên trình duyệt này.</p>
   </div>
   <div class="card" style="margin-top:14px"><h2>Quy đổi mã phân tích → hợp đồng MXV</h2>
-    <p class="sub">Chọn hợp đồng và số lot dùng để quy ra tiền cho từng mã. Vàng (XAUUSD) không có trong bảng MXV nên dùng mức bạn cung cấp: 100 USD cho mỗi 1 giá, phí tạm tính 350.000 đ. DXY không có hợp đồng nên chỉ thống kê theo R.</p>
+    <p class="sub">Chọn hợp đồng và số lot dùng để quy ra tiền cho từng mã. Vàng (XAUUSD) không có trong bảng MXV nên dùng mức bạn cung cấp: 100 USD cho mỗi 1 giá, phí tạm tính 450.000 đ/chiều như hợp đồng tiêu chuẩn Anfin. DXY không có hợp đồng nên chỉ thống kê theo R.</p>
     <div class="tbl-wrap" id="mapTbl"></div></div>
-  <div class="card" style="margin-top:14px"><h2>Bảng hợp đồng MXV</h2><p class="sub">Chép từ bảng bạn gửi. Ô đánh dấu ⚠ là chỗ “bước giá × biến động 1 giá” không khớp “biến động 1 bước giá” — kiểm tra lại với MXV.</p>
+  <div class="card" style="margin-top:14px"><h2>Bảng hợp đồng MXV</h2><p class="sub">Chép từ bảng bạn gửi; cột phí lấy theo biểu phí Anfin (VNĐ/lot/chiều, áp dụng từ 11/05/2026), mã không có trong biểu phí được ghi rõ nguồn. Ô đánh dấu ⚠ là chỗ “bước giá × biến động 1 giá” không khớp “biến động 1 bước giá” — kiểm tra lại với MXV.</p>
     <div class="tbl-wrap" id="specTbl"></div></div>
 </div>
 
@@ -289,6 +289,12 @@ const SPECS = [
  ['NQG','NYMEX','Khí tự nhiên mini','Năng lượng',120,46,23,0.005,12.5,2500,300000],
  ['RBE','NYMEX','Xăng RBOB','Năng lượng',2500,488,244,0.0001,4.2,42000,350000]
 ].map(r => ({ code:r[0], exch:r[1], name:r[2], group:r[3], val:r[4], cap:r[5], mar:r[6], tick:r[7], tickUsd:r[8], pt:r[9], fee:r[10] }));
+/* Biểu phí Anfin (hanghoa.anfin.vn/phi-giao-dich, áp dụng từ 11/05/2026), đơn vị VNĐ/lot/CHIỀU giao dịch — đọc ngày 28/10/2026.
+   Mã không có trong biểu phí Anfin (năng lượng, gạo, vàng) giữ phí bảng MXV hoặc giả định và được đánh dấu. */
+const ANFIN_FEE = { SIE:450000, SIL:250000, MQI:300000, PLE:450000, CTE:450000, CCE:450000, KCE:450000, LRC:450000, TRU:450000, ZFT:450000, MPO:450000,
+  ZLE:450000, ZSE:450000, XB:300000, CPE:450000, MHG:170000, MQC:300000, SBE:450000, QW:450000, ZME:450000, ZWA:450000, KWE:450000, XW:300000,
+  ZCE:450000, XC:300000, FEF:450000 };
+SPECS.forEach(s => { if (s.code in ANFIN_FEE){ s.fee = ANFIN_FEE[s.code]; s.feeSrc = 'Anfin'; } else if (s.code === 'VANG'){ s.fee = 450000; s.feeSrc = 'giả định (như hợp đồng tiêu chuẩn Anfin)'; } else s.feeSrc = 'bảng MXV – chưa có trong biểu phí Anfin'; });
 const SPEC = Object.fromEntries(SPECS.map(s => [s.code, s]));
 SPECS.forEach(s => { s.mismatch = Math.abs(s.tick * s.pt - s.tickUsd) > 1e-9 * Math.max(1, s.tickUsd); });
 // Mã gốc trong báo cáo -> hợp đồng MXV mặc định và các lựa chọn thay thế cùng tài sản
@@ -313,7 +319,8 @@ const LS_KEY = 'anfinx_signal_dash_v1';
 const store = { get(){ try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch(e){ return {}; } },
                 set(o){ try { localStorage.setItem(LS_KEY, JSON.stringify(o)); } catch(e){} } };
 const saved = store.get();
-const S = Object.assign({ entry:'reclaim', minRR:0, mode:'tp1', target:65, minN:20, half:false, fx:26000, feeMode:'rt', basis:'point', map:{}, lots:{}, theme:null, eqUnit:'R' }, saved.settings || {});
+const S = Object.assign({ entry:'reclaim', minRR:0, mode:'tp1', target:65, minN:20, half:false, fx:26000, feeMode:'side', basis:'point', map:{}, lots:{}, theme:null, eqUnit:'R' }, saved.settings || {});
+if ((S.feeSchema || 1) < 2){ S.feeMode = 'side'; S.feeSchema = 2; }   // biểu phí Anfin tính theo chiều: chuyển mặc định cũ sang ×2
 let SEED = { meta:{}, signals:[] };
 try { SEED = JSON.parse(document.getElementById('seed').textContent); } catch(e) { SEED = { meta:{}, signals:[] }; }
 let EXTRA = Array.isArray(saved.extra) ? saved.extra : [];
@@ -715,8 +722,8 @@ function download(name, text, type){ const a = document.createElement('a'); a.hr
    10. MXV: bảng hợp đồng, quy đổi, máy tính
    ============================================================ */
 function renderMXV(){
-  $('specTbl').innerHTML = `<table><thead><tr><th class="nosort">Nhóm</th><th class="nosort">Mã HĐ</th><th class="nosort">Sở</th><th class="nosort">Hàng hoá</th><th class="num nosort">Giá trị HĐ (tr)</th><th class="num nosort">Vốn khuyến nghị (tr)</th><th class="num nosort">Ký quỹ tối thiểu (tr)</th><th class="num nosort">Bước giá</th><th class="num nosort">1 bước giá (USD)</th><th class="num nosort">1 giá (USD)</th><th class="num nosort">Phí (VNĐ)</th></tr></thead><tbody>` +
-    SPECS.map(s => `<tr><td>${esc(s.group)}</td><td><b>${s.code}</b></td><td>${esc(s.exch)}</td><td>${esc(s.name)}</td><td class="num">${num(s.val, 0)}</td><td class="num">${num(s.cap, 0)}</td><td class="num">${num(s.mar, 0)}</td><td class="num">${s.tick}</td><td class="num">${s.mismatch ? '⚠ ' : ''}${s.tickUsd}${s.mismatch ? ` <span class="mut">(bước × 1 giá = ${+(s.tick * s.pt).toFixed(4)})</span>` : ''}</td><td class="num">${s.pt.toLocaleString('en-US')}</td><td class="num">${s.fee.toLocaleString('en-US')}</td></tr>`).join('') + '</tbody></table>';
+  $('specTbl').innerHTML = `<table><thead><tr><th class="nosort">Nhóm</th><th class="nosort">Mã HĐ</th><th class="nosort">Sở</th><th class="nosort">Hàng hoá</th><th class="num nosort">Giá trị HĐ (tr)</th><th class="num nosort">Vốn khuyến nghị (tr)</th><th class="num nosort">Ký quỹ tối thiểu (tr)</th><th class="num nosort">Bước giá</th><th class="num nosort">1 bước giá (USD)</th><th class="num nosort">1 giá (USD)</th><th class="num nosort">Phí / chiều (VNĐ)</th><th class="nosort">Nguồn phí</th></tr></thead><tbody>` +
+    SPECS.map(s => `<tr><td>${esc(s.group)}</td><td><b>${s.code}</b></td><td>${esc(s.exch)}</td><td>${esc(s.name)}</td><td class="num">${num(s.val, 0)}</td><td class="num">${num(s.cap, 0)}</td><td class="num">${num(s.mar, 0)}</td><td class="num">${s.tick}</td><td class="num">${s.mismatch ? '⚠ ' : ''}${s.tickUsd}${s.mismatch ? ` <span class="mut">(bước × 1 giá = ${+(s.tick * s.pt).toFixed(4)})</span>` : ''}</td><td class="num">${s.pt.toLocaleString('en-US')}</td><td class="num">${s.fee.toLocaleString('en-US')}</td><td class="${s.feeSrc === 'Anfin' ? '' : 'mut'}">${esc(s.feeSrc)}</td></tr>`).join('') + '</tbody></table>';
   const roots = ROOT_ORDER.filter(r => ROWS.some(s => s.root === r));
   $('mapTbl').innerHTML = `<table><thead><tr><th class="nosort">Mã phân tích</th><th class="nosort">Hợp đồng MXV</th><th class="num nosort">Số lot</th><th class="num nosort">USD / 1 giá</th><th class="num nosort">Ký quỹ (tr)</th><th class="num nosort">Phí / lệnh (VNĐ)</th></tr></thead><tbody>` +
     roots.map(r => { const cur = contractFor(r), opts = ['', ...new Set([...(MAP_ALT[r] || []), MAP_DEFAULT[r] || ''].filter(Boolean))]; const sp = SPEC[cur];
@@ -732,7 +739,7 @@ function calc(){
   const buy = $('cDir').value === 'buy', e = parseFloat($('cEntry').value), x = parseFloat($('cExit').value), sl = parseFloat($('cSL').value), lots = Math.max(1, Math.round(Number($('cLots').value) || 1));
   const fee = sp.fee * lots * (S.feeMode === 'side' ? 2 : 1), up = usdPerPoint(sp);
   const box = (l, v, c = '') => `<div><small>${l}</small><strong class="${c}">${v}</strong></div>`;
-  const out = [box('1 bước giá', `${sp.tick} = ${sp.tickUsd} USD`), box('Ký quỹ tối thiểu', sp.mar ? num(sp.mar * lots, 0) + ' tr' : 'chưa có số liệu'), box('Phí giao dịch', fee.toLocaleString('en-US') + ' đ')];
+  const out = [box('1 bước giá', `${sp.tick} = ${sp.tickUsd} USD`), box('Ký quỹ tối thiểu', sp.mar ? num(sp.mar * lots, 0) + ' tr' : 'chưa có số liệu'), box("Phí mở + đóng", fee.toLocaleString("en-US") + " đ")];
   if (isFinite(e) && isFinite(x)){
     const pts = buy ? x - e : e - x, ticks = pts / sp.tick, usd = pts * up * lots, vnd = usd * S.fx - fee;
     out.push(box('Số bước giá', sgn(ticks, Math.abs(ticks % 1) > 1e-9 ? 2 : 0), cl(ticks)), box('Lời/lỗ gộp', sgn(usd, 2) + ' USD', cl(usd)), box('Lời/lỗ ròng (sau phí)', sgn(vnd / 1e6, 3) + ' tr đ', cl(vnd)));
@@ -759,7 +766,7 @@ function renderDocs(){
   <li><b>Giữ lệnh tối đa ${m.max_hold_h || 120} giờ</b>; quá hạn thì đóng theo giá đóng cửa nến cuối (thắng nếu R > 0). Lệnh chưa ngã ngũ = “đang mở”, không tính vào win rate.</li>
   <li><b>Win rate</b> = lệnh thắng / lệnh đã đóng. <b>Khoảng tin cậy 95% Wilson</b> cho biết khoảng chứa win rate thật; chỉ gắn “Đạt” khi <b>cận dưới</b> ≥ mục tiêu và có đủ mẫu tối thiểu.</li>
   <li><b>Kỳ vọng R</b> = trung bình R mỗi lệnh đã đóng; <b>Profit factor</b> = tổng R thắng / tổng R thua; <b>Sụt giảm lớn nhất</b> tính trên đường R cộng dồn theo thời điểm đóng lệnh.</li>
-  <li><b>Lời/lỗ quy đổi</b> = chênh lệch giá × “biến động 1 giá” × số lot (hoặc số bước giá × “biến động 1 bước giá”) − phí; quy ra VNĐ theo tỷ giá bạn nhập. Vàng (XAUUSD, GC1!) tính 100 USD cho mỗi 1 giá theo thông tin bạn cung cấp (phí tạm tính 350.000 đ); DXY không có hợp đồng nên chỉ tính R. Vì mỗi hợp đồng có giá trị 1 bước giá khác nhau (1R của bạc lớn hơn nhiều 1R của ngô), tổng tiền có thể âm khi tổng R dương và ngược lại — dùng R để so sánh chất lượng tín hiệu giữa các mã, dùng tiền để biết tài khoản thực tế.</li>
+  <li><b>Lời/lỗ quy đổi</b> = chênh lệch giá × “biến động 1 giá” × số lot (hoặc số bước giá × “biến động 1 bước giá”) − phí; quy ra VNĐ theo tỷ giá bạn nhập. Vàng (XAUUSD, GC1!) tính 100 USD cho mỗi 1 giá theo thông tin bạn cung cấp (phí tạm tính 450.000 đ/chiều); DXY không có hợp đồng nên chỉ tính R. Vì mỗi hợp đồng có giá trị 1 bước giá khác nhau (1R của bạc lớn hơn nhiều 1R của ngô), tổng tiền có thể âm khi tổng R dương và ngược lại — dùng R để so sánh chất lượng tín hiệu giữa các mã, dùng tiền để biết tài khoản thực tế.</li>
   <li><b>Nguồn nến</b>: các bản chụp nến M15 đã lưu khi chạy báo cáo. Một kịch bản chỉ được chấm khi có một đoạn nến liên tục phủ từ giờ báo cáo đến hết hiệu lực; thiếu thì đánh dấu “Thiếu nến” và loại khỏi mọi thống kê (không phụ thuộc kết quả). Vàng FX/TVC dùng nến OANDA khi thiếu nến gốc.</li>
   <li><b>Cập nhật</b>: sau mỗi đợt phân tích chạy <code>node signals_export.js</code> rồi <code>node build_dashboard.js</code> trong thư mục Watchlist_report, hoặc nạp signals_all.json ở ô bên trên.</li></ol>
   <p class="note">Dữ liệu nhúng tạo lúc ${m.generated_at ? fmtT(m.generated_at) + ' (GMT+7)' : '–'} · ${(SEED.signals || []).length} kịch bản · ${(m.runs || []).length} đợt.</p>`;
